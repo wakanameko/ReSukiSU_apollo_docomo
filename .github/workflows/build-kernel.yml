@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       kernel_branch:
-        description: "aoitsme/android_kernel_sony_sdm845 のブランチ (ROMが使っているもの)"
+        description: "aoitsme/android_kernel_sony_sdm845 のブランチ (Lunaris-AOSP 3.12 の場合、bpf)"
         required: false
-        default: "lineage-23.0"
+        default: "bpf"
         type: string
       sukisu_ref:
         description: "SukiSU-Ultra のコミット/タグ (builtin ブランチ上のコミットを固定)"
