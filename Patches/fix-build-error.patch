@@ -1,17 +1,5 @@
-From b13f64402642e3cc50281946add4d90fcbf319b6 Mon Sep 17 00:00:00 2001
-From: MerCuJerry <mercujerry@gmail.com>
-Date: Fri, 5 Sep 2025 20:15:29 +0800
-Subject: [PATCH] fix: fix build error while using clang
-
----
- arch/arm64/Makefile                                    | 6 +-----
- drivers/staging/qca-wifi-host-cmn/hif/src/ce/ce_main.c | 2 +-
- drivers/staging/qca-wifi-host-cmn/qdf/inc/qdf_status.h | 1 +
- drivers/staging/qcacld-3.0/core/dp/htt/htt_h2t.c       | 4 ++--
- 4 files changed, 5 insertions(+), 8 deletions(-)
-
 diff --git a/arch/arm64/Makefile b/arch/arm64/Makefile
-index 715422cdc..3fc5b31c0 100644
+index 80571ee20..7d708db1b 100644
 --- a/arch/arm64/Makefile
 +++ b/arch/arm64/Makefile
 @@ -66,11 +66,7 @@ ifeq ($(CONFIG_COMPAT_VDSO), y)
@@ -21,7 +9,7 @@ index 715422cdc..3fc5b31c0 100644
 -    export CLANG_TARGET_ARM32 := --target=arm-linux-gnueabi
 -    export GCC_TOOLCHAIN32_DIR := $(dir $(shell which $(CROSS_COMPILE_ARM32)ld))
 -    export GCC_TOOLCHAIN32 := $(realpath $(GCC_TOOLCHAIN32_DIR)/..)
--    export CLANG_PREFIX32 := --prefix=$(GCC_TOOLCHAIN32_DIR)
+-    export CLANG_PREFIX32 := --prefix=$(GCC_TOOLCHAIN32_DIR)$(notdir $(CROSS_COMPILE_ARM32))
 -    export CLANG_GCC32_TC := --gcc-toolchain=$(GCC_TOOLCHAIN32)
 +    export CLANG_TARGET_ARM32 := --target=$(notdir $(CLANG_TRIPLE_ARM32:%-=%))
      export CONFIG_VDSO32 := y
@@ -74,6 +62,3 @@ index b2ca24249..04fe0ad00 100644
  	}
  	/*
  	 * Set the length of the message.
--- 
-2.51.0
-
