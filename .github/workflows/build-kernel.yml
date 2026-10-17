@@ -8,6 +8,11 @@ on:
         required: false
         default: "bpf"
         type: string
+      defconfig:
+        description: "defconfig (dcm版=tama_apollo_dcm_defconfig / 通常版=tama_apollo_defconfig)"
+        required: false
+        default: "tama_apollo_dcm_defconfig"
+        type: string
       sukisu_ref:
         description: "SukiSU-Ultra のコミット/タグ (builtin ブランチ上のコミットを固定)"
         required: false
@@ -28,7 +33,7 @@ jobs:
       CCACHE_HARDLINK: "true"
       CCACHE_DIR: /home/runner/.ccache_apollo
       CCACHE_MAXSIZE: 8G
-      DEFCONFIG: tama_apollo_kddi_defconfig   # 参考元の xz2c_dcm と同じ構成
+      DEFCONFIG: ${{ inputs.defconfig }}
     name: Build Kernel for apollo
     steps:
       - name: Maximize build space
@@ -163,3 +168,4 @@ jobs:
           name: apollo_SukiSU_${{ env.KSUVER }}
           path: AnyKernel3
           compression-level: 9
+
