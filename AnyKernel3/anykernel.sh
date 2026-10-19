@@ -4,7 +4,7 @@
 ### AnyKernel setup
 # global properties
 properties() { '
-kernel.string=Apollo Kernel With SukiSU (Lunaris AOSP / Android 16)
+kernel.string=Apollo Kernel With ReSukiSU (Lunaris AOSP / Android 16)
 do.devicecheck=1
 do.modules=0
 do.systemless=0
