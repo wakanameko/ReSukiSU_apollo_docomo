@@ -13,10 +13,15 @@ on:
         required: false
         default: "tama_apollo_dcm_defconfig"
         type: string
-      resukisu_ref:
-        description: "ReSukiSU のコミット/タグ (Default: 896e8981 / v4.2.0-rc3 main branch)"
+      enable_susfs:
+        description: "Enable SUSFS"
         required: false
-        default: "896e8981e0ed76ec14d1dcb39ab793438b304886"
+        default: true
+        type: boolean
+      resukisu_ref:
+        description: "ReSukiSU のコミット/タグ (空欄の時はSUSFSの有無に合わせて[5b76b884]と[896e8981]を切り替える)"
+        required: false
+        default: ""
         type: string
 
 jobs:
@@ -70,30 +75,63 @@ jobs:
           7za x llvm22.0.0-binutils2.44_amd64-kernel-arm_static-20250831.7z
           rm llvm22.0.0-binutils2.44_amd64-kernel-arm_static-20250831.7z
 
+      - name: Select ReSukiSU ref
+        run: |
+          # ReSukiSu 48fa4bb7以降、SUSFSビルドを停止しているため、SUSFS有効時はその直前のコミットを使う
+          if [ -n "${{ inputs.resukisu_ref }}" ]; then
+            REF="${{ inputs.resukisu_ref }}"
+          elif [ "${{ inputs.enable_susfs }}" = "true" ]; then
+            REF="5b76b884c75f729a220bb317aa4a4fc78f0e0e9c"
+          else
+            REF="896e8981e0ed76ec14d1dcb39ab793438b304886"
+          fi
+          echo "RESUKISU_REF=$REF" >> $GITHUB_ENV
+          if [ "${{ inputs.enable_susfs }}" = "true" ]; then echo "MODE=susfs_" >> $GITHUB_ENV; else echo "MODE=" >> $GITHUB_ENV; fi
+
       - name: Set up ReSukiSU
         working-directory: kernel
         run: |
-          curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash -s "${{ inputs.resukisu_ref }}"
+          curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash -s "$RESUKISU_REF"
           cd ./KernelSU
           # setup.sh はチェックアウトに失敗しても黙って main になるため、指定refと一致するか確認
-          test "$(git rev-parse HEAD)" = "$(git rev-parse '${{ inputs.resukisu_ref }}^{commit}')" || { echo "ReSukiSU ref checkout failed"; exit 1; }
+          test "$(git rev-parse HEAD)" = "$(git rev-parse "$RESUKISU_REF^{commit}")" || { echo "ReSukiSU ref checkout failed"; exit 1; }
           echo "KSUVER=$(git rev-parse --short=8 HEAD)" >> $GITHUB_ENV
 
       - name: Patch Kernel
         working-directory: kernel
         run: |
           patch -p1 < $GITHUB_WORKSPACE/Patches/fix-build-error.patch
-          patch -p1 < $GITHUB_WORKSPACE/Patches/ReSukiSU-Manual-hooks.patch
+          if [ "${{ inputs.enable_susfs }}" = "true" ]; then
+            # SUSFS v2.3.0 (4.9向け移植版 wxx9248/susfs4ksu) のコア3ファイルを配置し、bpf向けに作り直したパッチを適用
+            cp $GITHUB_WORKSPACE/susfs/fs/susfs.c fs/
+            cp $GITHUB_WORKSPACE/susfs/include/linux/susfs.h $GITHUB_WORKSPACE/susfs/include/linux/susfs_def.h include/linux/
+            patch -p1 < $GITHUB_WORKSPACE/Patches/susfs-v2.3.0-bpf.patch
+          else
+            patch -p1 < $GITHUB_WORKSPACE/Patches/ReSukiSU-Manual-hooks.patch
+          fi
 
       - name: Add Kernel Build Configuration Settings
         working-directory: kernel/arch/arm64/configs
         run: |
           C=./${DEFCONFIG}
           echo "CONFIG_KSU=y" >> $C
-          echo "CONFIG_KSU_MANUAL_HOOK=y" >> $C
-          echo "CONFIG_KSU_MANUAL_HOOK_AUTO_INPUT_HOOK=y" >> $C
-          echo "CONFIG_KSU_MANUAL_HOOK_AUTO_SETUID_HOOK=y" >> $C
-          echo "CONFIG_KSU_MANUAL_HOOK_AUTO_INITRC_HOOK=y" >> $C
+          if [ "${{ inputs.enable_susfs }}" = "true" ]; then
+            echo "CONFIG_KSU_SUSFS=y" >> $C
+            echo "CONFIG_KSU_SUSFS_SUS_PATH=y" >> $C
+            echo "CONFIG_KSU_SUSFS_SUS_MOUNT=y" >> $C
+            echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> $C
+            echo "CONFIG_KSU_SUSFS_SPOOF_UNAME=y" >> $C
+            echo "CONFIG_KSU_SUSFS_ENABLE_LOG=y" >> $C
+            echo "CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y" >> $C
+            echo "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y" >> $C
+            echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y" >> $C
+            echo "CONFIG_KSU_SUSFS_SUS_MAP=y" >> $C
+          else
+            echo "CONFIG_KSU_MANUAL_HOOK=y" >> $C
+            echo "CONFIG_KSU_MANUAL_HOOK_AUTO_INPUT_HOOK=y" >> $C
+            echo "CONFIG_KSU_MANUAL_HOOK_AUTO_SETUID_HOOK=y" >> $C
+            echo "CONFIG_KSU_MANUAL_HOOK_AUTO_INITRC_HOOK=y" >> $C
+          fi
 
       - name: Build Kernel for apollo
         working-directory: kernel
@@ -115,6 +153,6 @@ jobs:
       - name: Pack kernel image with AnyKernel3
         uses: actions/upload-artifact@v4
         with:
-          name: apollo_ReSukiSU_${{ env.KSUVER }}
+          name: apollo_ReSukiSU_${{ env.MODE }}${{ env.KSUVER }}
           path: AnyKernel3
           compression-level: 9
